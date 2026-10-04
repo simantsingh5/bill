@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.json">
+<title>Paint Store V0</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f6f8;color:#172033}
+header{position:sticky;top:0;z-index:5;background:#111827;color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+header b{font-size:18px}.wrap{max-width:1000px;margin:auto;padding:14px}
+nav{display:flex;gap:6px;overflow:auto;background:#fff;padding:8px;border-bottom:1px solid #ddd;position:sticky;top:52px;z-index:4}
+nav button{border:0;background:#eef0f4;padding:9px 12px;border-radius:10px;white-space:nowrap}
+nav button.active{background:#111827;color:white}
+section{display:none}.activeSection{display:block}
+.card{background:#fff;border:1px solid #e3e6eb;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px #0000000b}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{padding:15px;border-radius:12px;background:#f0f3f7}.stat small{color:#697386}.stat strong{display:block;font-size:22px;margin-top:4px}
+input,select,button,textarea{font:inherit}input,select,textarea{width:100%;padding:10px;border:1px solid #ccd2da;border-radius:9px;background:white}
+button{cursor:pointer;border:0;border-radius:9px;padding:10px 13px}.primary{background:#111827;color:white}.danger{background:#fee2e2;color:#991b1b}.muted{color:#687386}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}.row button{flex:0 0 auto}
+.product{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #eee}
+.product:last-child{border:0}.price{font-weight:700}.tag{font-size:12px;background:#eef2ff;padding:3px 7px;border-radius:8px}
+.qty{width:75px!important;text-align:center}.small{font-size:13px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #eee;font-size:14px}
+@media(max-width:600px){.wrap{padding:9px}.grid{grid-template-columns:1fr 1fr}.row.stack{flex-direction:column;align-items:stretch}}
+</style>
+</head>
+<body>
+<header><b>🎨 Paint Store V0</b><span id="status" class="small">Local</span></header>
+<nav id="nav">
+<button class="active" data-tab="sell">Sell</button><button data-tab="inventory">Inventory</button>
+<button data-tab="customers">Customers</button><button data-tab="reports">Reports</button><button data-tab="admin">Admin</button>
+</nav>
+<div class="wrap">
+<section id="sell" class="activeSection">
+<div class="card"><h3>New Sale</h3><input id="search" placeholder="Search products..."><div id="products"></div></div>
+<div class="card"><h3>Cart</h3><div id="cart"></div><div class="row"><input id="customer" placeholder="Customer name (optional)"><select id="payment"><option>Paid</option><option>Partial</option><option>Credit</option></select></div><div id="partialBox" style="display:none;margin-top:8px"><input id="paid" type="number" min="0" placeholder="Amount paid"></div><button class="primary" style="width:100%;margin-top:10px" onclick="checkout()">Complete Sale</button></div>
+</section>
+
+<section id="inventory">
+<div class="card"><h3>Inventory</h3><input id="invSearch" placeholder="Search stock..." oninput="renderInventory()"><div id="inventoryList"></div></div>
+</section>
+
+<section id="customers">
+<div class="card"><h3>Customers</h3><div id="customerList"></div></div>
+</section>
+
+<section id="reports">
+<div class="grid">
+<div class="stat"><small>Today revenue</small><strong id="todayRevenue">₹0</strong></div>
+<div class="stat"><small>Today items</small><strong id="todayItems">0</strong></div>
+<div class="stat"><small>Outstanding</small><strong id="outstanding">₹0</strong></div>
+<div class="stat"><small>Low stock</small><strong id="lowStock">0</strong></div>
+</div>
+<div class="card"><h3>Recent sales</h3><div id="salesList"></div></div>
+</section>
+
+<section id="admin">
+<div class="card"><h3>Add Product</h3>
+<div class="grid"><input id="pname" placeholder="Product name"><input id="pcat" placeholder="Category"><input id="ppurchase" type="number" placeholder="Purchase price"><input id="pprice" type="number" placeholder="Selling price"><input id="pstock" type="number" placeholder="Opening quantity"><input id="punit" placeholder="Unit (pcs, L, kg)"><input id="pmin" type="number" placeholder="Low-stock threshold"></div>
+<button class="primary" style="margin-top:10px" onclick="addProduct()">Add Product</button></div>
+<div class="card"><h3>Data</h3><p class="muted">Everything is stored locally in this browser. Clearing site data will remove it.</p><div class="row"><button onclick="exportData()">Export backup</button><button onclick="document.getElementById('importFile').click()">Import backup</button><button class="danger" onclick="resetData()">Reset all data</button></div><input id="importFile" type="file" accept=".json" hidden onchange="importData(event)"></div>
+</section>
+</div>
+<script>
+const KEY='paint-store-v0';
+let db=JSON.parse(localStorage.getItem(KEY)||'null')||{products:[
+{id:1,name:'Asian Paints White 20L',cat:'Paint',purchase:4300,price:4850,stock:10,unit:'bucket',min:2},
+{id:2,name:'Wall Putty 20kg',cat:'Putty',purchase:650,price:800,stock:20,unit:'bag',min:3},
+{id:3,name:'Paint Brush 4 inch',cat:'Brush',purchase:55,price:80,stock:30,unit:'pcs',min:5},
+{id:4,name:'Thinner 1L',cat:'Thinner',purchase:90,price:130,stock:15,unit:'L',min:3}
+],sales:[],customers:[]};
+function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+function money(n){return '₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:2})}
+let cart=[];
+function renderProducts(){
+ const q=document.getElementById('search').value.toLowerCase();
+ const el=document.getElementById('products');el.innerHTML='';
+ db.products.filter(p=>(p.name+' '+p.cat).toLowerCase().includes(q)).forEach(p=>{
+  const d=document.createElement('div');d.className='product';
+  d.innerHTML=`<div><b>${esc(p.name)}</b><div class="small muted">${esc(p.cat)} · ${money(p.price)} / ${esc(p.unit||'unit')} · Stock ${p.stock}</div></div><button onclick="addCart(${p.id})">Add</button>`;
+  el.appendChild(d);
+ });
+}
+function addCart(id){let x=cart.find(x=>x.id===id);if(x)x.qty++;else{let p=db.products.find(p=>p.id===id);cart.push({id,qty:1,price:p.price,name:p.name})}renderCart();}
+function renderCart(){
+ const el=document.getElementById('cart');el.innerHTML='';
+ let total=0;
+ cart.forEach(x=>{total+=x.qty*x.price;let d=document.createElement('div');d.className='product';d.innerHTML=`<div><b>${esc(x.name)}</b><div>${money(x.price)} × <input class="qty" type="number" min="1" value="${x.qty}" onchange="setQty(${x.id},this.value)"></div></div><button class="danger" onclick="removeCart(${x.id})">×</button>`;el.appendChild(d)});
+ el.insertAdjacentHTML('beforeend',`<div style="text-align:right;margin-top:10px"><b>Total: ${money(total)}</b></div>`);
+}
+function setQty(id,q){q=Math.max(1,parseInt(q)||1);let x=cart.find(x=>x.id===id);x.qty=q;renderCart()}
+function removeCart(id){cart=cart.filter(x=>x.id!==id);renderCart()}
+document.getElementById('payment').onchange=e=>document.getElementById('partialBox').style.display=e.target.value==='Partial'?'block':'none';
+function checkout(){
+ if(!cart.length)return alert('Cart is empty');
+ for(const x of cart){let p=db.products.find(p=>p.id===x.id);if(x.qty>p.stock)return alert('Not enough stock: '+p.name)}
+ const total=cart.reduce((s,x)=>s+x.qty*x.price,0), method=document.getElementById('payment').value;
+ let paid=method==='Paid'?total:method==='Credit'?0:Number(document.getElementById('paid').value||0);
+ if(paid>total)return alert('Paid amount cannot exceed total');
+ const name=document.getElementById('customer').value.trim()||'Walk-in';
+ const sale={id:Date.now(),date:new Date().toISOString(),customer:name,items:cart.map(x=>({...x})),total,paid,due:total-paid};
+ cart.forEach(x=>db.products.find(p=>p.id===x.id).stock-=x.qty);
+ db.sales.unshift(sale);
+ if(name!=='Walk-in'){let c=db.customers.find(c=>c.name.toLowerCase()===name.toLowerCase());if(!c){c={name,phone:'',due:0};db.customers.push(c)}c.due+=sale.due}
+ save();cart=[];document.getElementById('customer').value='';document.getElementById('paid').value='';renderAll();alert('Sale completed');
+}
+function renderInventory(){
+ const q=document.getElementById('invSearch').value.toLowerCase(),el=document.getElementById('inventoryList');el.innerHTML='';
+ db.products.filter(p=>(p.name+' '+p.cat).toLowerCase().includes(q)).forEach(p=>{
+  let d=document.createElement('div');d.className='product';d.innerHTML=`<div><b>${esc(p.name)}</b><div class="small muted">${esc(p.cat)} · ${money(p.price)} · ${p.stock} ${esc(p.unit||'unit')} ${p.stock<=p.min?'<span class="tag">LOW</span>':''}</div></div><div class="row"><input class="qty" type="number" value="${p.stock}" onchange="setStock(${p.id},this.value)"><button onclick="changePrice(${p.id})">Price</button></div>`;el.appendChild(d)
+ })
+}
+function setStock(id,v){let p=db.products.find(p=>p.id===id);p.stock=Math.max(0,Number(v)||0);save();renderAll()}
+function changePrice(id){let p=db.products.find(p=>p.id===id),v=prompt('New selling price',p.price);if(v!==null&&Number(v)>=0){p.price=Number(v);save();renderAll()}}
+function addProduct(){
+ let p={id:Date.now(),name:document.getElementById('pname').value.trim(),cat:document.getElementById('pcat').value.trim()||'Other',purchase:Number(document.getElementById('ppurchase').value||0),price:Number(document.getElementById('pprice').value||0),stock:Number(document.getElementById('pstock').value||0),unit:document.getElementById('punit').value.trim()||'pcs',min:Number(document.getElementById('pmin').value||0)};
+ if(!p.name)return alert('Enter product name');db.products.push(p);save();['pname','pcat','ppurchase','pprice','pstock','punit','pmin'].forEach(id=>document.getElementById(id).value='');renderAll();alert('Product added');
+}
+function renderCustomers(){let el=document.getElementById('customerList');el.innerHTML=db.customers.length?db.customers.map(c=>`<div class="product"><div><b>${esc(c.name)}</b></div><strong>${money(c.due)}</strong></div>`).join(''):'<p class="muted">No customers with credit yet.</p>'}
+function renderReports(){
+ let start=new Date();start.setHours(0,0,0,0);let today=db.sales.filter(s=>new Date(s.date)>=start);
+ document.getElementById('todayRevenue').textContent=money(today.reduce((a,s)=>a+s.total,0));
+ document.getElementById('todayItems').textContent=today.reduce((a,s)=>a+s.items.reduce((b,i)=>b+i.qty,0),0);
+ document.getElementById('outstanding').textContent=money(db.customers.reduce((a,c)=>a+c.due,0));
+ document.getElementById('lowStock').textContent=db.products.filter(p=>p.stock<=p.min).length;
+ document.getElementById('salesList').innerHTML=db.sales.slice(0,20).map(s=>`<div class="product"><div><b>${esc(s.customer)}</b><div class="small muted">${new Date(s.date).toLocaleString('en-IN')} · ${s.items.reduce((a,i)=>a+i.qty,0)} items</div></div><div><b>${money(s.total)}</b><div class="small muted">Due ${money(s.due)}</div></div></div>`).join('')||'<p class="muted">No sales yet.</p>'
+}
+function renderAll(){renderProducts();renderCart();renderInventory();renderCustomers();renderReports()}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('section').forEach(x=>x.classList.remove('activeSection'));document.getElementById(b.dataset.tab).classList.add('activeSection');renderAll()});
+document.getElementById('search').oninput=renderProducts;
+function exportData(){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(db,null,2)],{type:'application/json'}));a.download='paint-store-backup.json';a.click()}
+function importData(e){let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!x.products||!x.sales)return alert('Invalid backup');db=x;save();renderAll();alert('Backup imported')}catch(_){alert('Invalid backup')}};r.readAsText(f)}
+function resetData(){if(confirm('Delete ALL local data?')){localStorage.removeItem(KEY);location.reload()}}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+renderAll();
+</script>
+</body></html>
